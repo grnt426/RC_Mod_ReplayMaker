@@ -9,9 +9,13 @@ class ReplayMaker {
 
     gameLoaded() {
 
+        window.granite.debug("Game load detected; checking for replay data.");
+
         // No point in creating a history if the game is already over.
-        if(this.#gameEnded())
+        if(this.#gameEnded()) {
+            window.granite.debug("Game ended, not bothering with history data.");
             return;
+        }
 
         let instance = window.gamestate.game.auth.instance;
         let galaxy = window.gamestate.game.galaxy;
@@ -39,8 +43,10 @@ class ReplayMaker {
     update(data) {
 
         // No need to process incoming updates if game has ended.
-        if(this.#gameEnded())
+        if(this.#gameEnded()) {
+            window.granite.debug("Game ended, not bothering with history updates.");
             return;
+        }
 
         if(data.global_galaxy_system || data.global_galaxy_sector) {
             window.granite.debug("Applying system/sector update.");
