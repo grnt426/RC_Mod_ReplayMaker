@@ -79,6 +79,7 @@ export default class HistoryManager {
             current:clone(galaxy), snapshots: [], undo: [], instance:instance,
             currentTime:DateTime.now().toISO()
         }
+        this.#loadedGalaxies[instance] = historyData;
 
         fs.mkdir(this.#rootDir + instance, err => {
             if(err) {
