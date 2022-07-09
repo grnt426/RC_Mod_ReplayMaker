@@ -1,4 +1,4 @@
-import HistoryManager from "./historymanager.js";
+import HistoryManager from "./HistoryManager.mjs";
 let fs = require("fs");
 let clone = require("./clone");
 
@@ -29,7 +29,7 @@ class ReplayMaker {
             }
         }
 
-            // If the game was closed and then later re-opened to the same galaxy, we need to catch up to the current
+        // If the game was closed and then later re-opened to the same galaxy, we need to catch up to the current
         // state of the game
         else {
             window.granite.debug("Updating history to current state!", window.granite.levels.DEBUG);
@@ -37,7 +37,6 @@ class ReplayMaker {
                 s.unknownTime = true;
                 this.historyManager.applySystemUpdate(s, instance);
             });
-            this.historyManager.applySectorsUpdate(snapshot.sectors, instance)
         }
     }
 
@@ -56,9 +55,6 @@ class ReplayMaker {
             // it is safer to use deep-copies of the updates, as HistoryManager may make edits to the objects.
             if(data.global_galaxy_system) {
                 this.historyManager.applySystemUpdate(clone(data.global_galaxy_system), instance);
-            }
-            else if(data.global_galaxy_sector) {
-                this.historyManager.applySectorsUpdate(clone(data.global_galaxy_sector), instance);
             }
         }
     }

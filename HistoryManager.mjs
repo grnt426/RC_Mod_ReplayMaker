@@ -1,6 +1,6 @@
-let fs = require("fs");
-const {DateTime} = require("luxon");
-let clone = require("./clone");
+import fs from "fs";
+import {DateTime} from "luxon";
+import clone from "./clone.js";
 
 export default class HistoryManager {
 
@@ -115,9 +115,13 @@ export default class HistoryManager {
         sys.type = "system";
         const curState = history.current;
         const storedSys = this.#getById(curState.stellar_systems, sys.id);
+        const storedSec = this.#getById(curState.sectors, sys.sector_id);
 
-        if(storedSys === null) {
+        if(storedSys == null) {
             throw "Null system ID: " + sys.id + " from instance " + instance;
+        }
+        else if(storedSec == null) {
+            throw "Null sector ID: " + sys.sector_id + " from instance " + instance;
         }
 
         if(storedSys.owner !== sys.owner || storedSys.status !== sys.status) {
@@ -136,61 +140,44 @@ export default class HistoryManager {
             delete sys.score;
             delete sys.receivedAt;
 
-            // Build the forwards/backwards snapshots
-            history.undo.push(u);
-            history.snapshots.push(sys);
-
             // Update the stored current state of the galaxy
             storedSys.owner = sys.owner;
             storedSys.faction = sys.faction;
             storedSys.status = sys.status;
             history.currentTime = sys.time;
 
+            // now handle the previous sector state for undo history
+            const sec = clone(storedSec);
+            delete sec.adjacent;
+            delete sec.centroid;
+            delete sec.points; // these are the vertices of a sector's perimeter
+
+            const curSector = this.getSector(sec.id);
+            storedSec.owner = curSector.owner;
+            storedSec.division = curSector.division;
+
+            /**
+             * We bundle the system and sector updates into one update record for simplicity.
+             * Before, we had them separated, but this doesn't make sense as taking or losing a system always
+             * updates the sector's balance of control. It might also sometimes change its
+             * owner. More importantly, having them separate means the replay viewer needs to understand when
+             * these transitions happen; this unnecessarily pushes game logic into the viewer.
+             *
+             * Note: This means the replay format has changed. Older formats can still be forwards-compatible.
+             */
+            const record = {system:sys, sector:clone(storedSec)};
+            const undoR = {system:u, sector:sec};
+
+            // Build the forwards/backwards snapshots
+            history.undo.push(undoR);
+            history.snapshots.push(record);
+
             this.saveHistoryToDisk(history);
         }
     }
 
-    /**
-     * Checks all the provided sectors against the current state of the galaxy based on the instance
-     * provided. Updates sectors if ownership changed.
-     *
-     * @param sectors   List of sectors to check for differences.
-     * @param instance  Integer representing the game instance to check against.
-     */
-    applySectorsUpdate(sectors, instance) {
-
-        if(this.#fatal) {
-            return;
-        }
-
-        if(!sectors)
-            return;
-
-        let history = this.getHistory(instance);
-
-        sectors.forEach(sec => {
-            let id = sec.id;
-            let curr = this.#getById(history.current.sectors, id);
-            if(curr.owner !== sec.owner) {
-                sec.type = "sector";
-                sec.time = DateTime.now().toISO();
-                delete sec.adjacent;
-                delete sec.centroid;
-                delete sec.points;
-
-                const u = clone(curr);
-                u.time = history.currentTime;
-                u.type = "sector";
-
-                history.snapshots.push(sec);
-                history.undo.push(u);
-
-                curr.owner = sec.owner;
-                curr.division = sec.division;
-
-                this.saveHistoryToDisk(history);
-            }
-        });
+    getSector(sector_id) {
+        return window.gamestate.game.galaxy.sectors[sector_id];
     }
 
     /**
