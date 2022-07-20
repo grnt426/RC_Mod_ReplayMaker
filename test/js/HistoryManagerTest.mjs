@@ -67,7 +67,7 @@ describe("HistoryManager", function() {
         histUp = new HistoryVersionUpgrader();
     });
 
-    describe("#HistoryUpgrades", function() {
+    describe("#HistoryVersionUpgrader", function() {
         describe("versionTesting", function() {
             it("given empty detect no version", function() {
                 let emptyJson = JSON.stringify({});
@@ -99,6 +99,10 @@ describe("HistoryManager", function() {
                 let version05History = JSON.stringify({VERSION:0.5});
                 assert(histUp.shouldUpgradeHistory(version05History));
             });
+        });
+
+        describe("#upgradeHistoryFile", function() {
+
         });
     });
 

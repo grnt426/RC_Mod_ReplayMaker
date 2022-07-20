@@ -267,38 +267,44 @@ export class History {
 
 export class HistoryVersionUpgrader {
 
-    shouldUpgradeHistory(json) {
-        return !json.VERSION && json.version !== LATEST_HISTORY_VESRION;
+    shouldUpgradeHistory(h) {
+        let hist = this.#convertHistoryToObj(h);
+        return !hist.VERSION || hist.VERSION !== LATEST_HISTORY_VESRION;
     }
 
-    isAlphaVersion(json) {
+    isAlphaVersion(h) {
+        let hist = this.#convertHistoryToObj(h);
         return false;
     }
 
-    isBetaVersion(json) {
+    isBetaVersion(h) {
         try {
-            let parsed = JSON.parse(json);
+            let hist = this.#convertHistoryToObj(h);
 
             // Beta versions don't have the system and sector updates combined into a single snapshot record.
             // Thus, if we detect the absence of the `system` property, we know they aren't bundled together
             // and this must be an old version.
-            return !parsed.VERSION && parsed.snapshots && parsed.snapshots.length > 0 && !parsed.snapshots[0].system;
+            return !hist.VERSION && hist.snapshots && hist.snapshots.length > 0 && !hist.snapshots[0].system;
         }
         catch(err) {
             return false;
         }
     }
 
-    detectVersion(json) {
-        if(this.isAlphaVersion(json)) {
-            return DUMMY_ALPHA_VERSION;
-        }
-        else if(this.isBetaVersion(json)) {
-            return DUMMY_BETA_VERSION;
-        }
-
+    detectVersion(h) {
         try {
-            return JSON.parse(json).VERSION;
+            let hist = this.#convertHistoryToObj(h);
+            if(this.isAlphaVersion(hist)) {
+                return DUMMY_ALPHA_VERSION;
+            } else if(this.isBetaVersion(hist)) {
+                return DUMMY_BETA_VERSION;
+            }
+
+            try {
+                return hist.VERSION;
+            } catch(err) {
+                return false;
+            }
         }
         catch(err) {
             return false;
@@ -307,7 +313,9 @@ export class HistoryVersionUpgrader {
 
     upgradeHistoryFile(json) {
 
-        let detectedVersion = this.detectVersion(json);
+        let historyObj = JSON.parse(json);
+
+        let detectedVersion = this.detectVersion(historyObj);
 
         // Creating direct version upgrades over time can be cumbersome, so instead we allow for incremental
         // upgrades over time, as upgrading from A -> B is easy to understand, but A -> D means retroactively
@@ -315,12 +323,12 @@ export class HistoryVersionUpgrader {
         // C -> D
         while(detectedVersion !== LATEST_HISTORY_VESRION) {
             switch(detectedVersion) {
-                case DUMMY_ALPHA_VERSION: this.upgradeAlpha(json); break;
-                case DUMMY_BETA_VERSION: this.upgradeBeta(json); break;
+                case DUMMY_ALPHA_VERSION: this.upgradeAlpha(historyObj); break;
+                case DUMMY_BETA_VERSION: this.upgradeBeta(historyObj); break;
                 default: throw "Unable to upgrade history file: unknown version: " + detectedVersion;
             }
 
-            detectedVersion = this.detectVersion(json);
+            detectedVersion = this.detectVersion(historyObj);
         }
     }
 
@@ -330,5 +338,19 @@ export class HistoryVersionUpgrader {
 
     upgradeBeta(json) {
 
+    }
+
+    /**
+     * This does NOT convert the given data into a `History` class instance, it just converts it into
+     * a JSON object so its fields can be queried.
+     *
+     * If given a JSON object, will return the same object.
+     *
+     * @param hist  Entity to convert into a JSON object if not already
+     */
+    #convertHistoryToObj(hist) {
+        if(typeof hist === "object")
+            return hist;
+        return JSON.parse(hist);
     }
 }
