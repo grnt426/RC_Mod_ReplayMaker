@@ -1,5 +1,5 @@
 import assert from 'assert';
-import HistoryManager from "../../HistoryManager.mjs";
+import {HistoryManager, History, HistoryVersionUpgrader, DUMMY_BETA_VERSION} from "../../HistoryManager.mjs";
 import fs from "fs";
 import structuredClone from "realistic-structured-clone";
 
@@ -7,6 +7,9 @@ describe("HistoryManager", function() {
 
     // HistoryManager instance under test
     let man = undefined;
+
+    // HistoryVersionUpgrader instance under test
+    let histUp = undefined;
 
     const testRootDir = "test/snapshots/";
 
@@ -16,15 +19,9 @@ describe("HistoryManager", function() {
     // Contains the bare minimum to count as a history instance.
     const EMPTY_INSTANCE = 10;
     const EMPTY_INSTANCE_PATH = testRootDir + EMPTY_INSTANCE + "/history.json";
-    const EMPTY_HISTORY = {
-        "start": "2022-03-24T10:01:50.085-04:00",
-        "base": {stellar_systems:[],sectors:[]},
-        "current": {stellar_systems:[],sectors:[]},
-        "snapshots": [],
-        "undo": [],
-        "instance": 10,
-        "currentTime": "2022-03-24T10:01:50.085-04:00"
-    };
+    const EMPTY_HISTORY = new History(EMPTY_INSTANCE);
+    EMPTY_HISTORY.start = "2022-03-24T10:01:50.085-04:00";
+    EMPTY_HISTORY.currentTimestamp = "2022-03-24T10:01:50.085-04:00";
 
     // Creates a simple starting history file with one system in one sector
     const SIMPLE_INSTANCE = 20;
@@ -32,7 +29,8 @@ describe("HistoryManager", function() {
     const SIMPLE_SECTOR = {
         "id":0,
         "name":"simple sector",
-        "owner":null
+        "owner":null,
+        "division":[{"faction":null, points:1}],
     };
     const SIMPLE_SYSTEM = {
         "id": 1,
@@ -41,15 +39,15 @@ describe("HistoryManager", function() {
         "sector_id": 0,
         "status":"uninhabited"
     };
-    const SIMPLE_HISTORY = {
-        "start": "2022-03-24T10:01:50.085-04:00",
-        "base": {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]},
-        "current": {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]},
-        "snapshots": [],
-        "undo": [],
-        "instance": 20,
-        "currentTime": "2022-03-24T10:01:50.085-04:00"
-    };
+    const SIMPLE_HISTORY = new History(
+        SIMPLE_INSTANCE, {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]}
+    );
+    SIMPLE_HISTORY.start = "2022-03-24T10:01:50.085-04:00";
+    SIMPLE_HISTORY.currentTimestamp = "2022-03-24T10:01:50.085-04:00";
+
+    const EMPTY_BETA_HISTORY = {
+        snapshots:[{}]
+    }
 
     beforeEach(function() {
 
@@ -66,6 +64,42 @@ describe("HistoryManager", function() {
         });
 
         man = new HistoryManager(testRootDir);
+        histUp = new HistoryVersionUpgrader();
+    });
+
+    describe("#HistoryUpgrades", function() {
+        describe("versionTesting", function() {
+            it("given empty detect no version", function() {
+                let emptyJson = JSON.stringify({});
+                assert(!histUp.isAlphaVersion(emptyJson));
+                assert(!histUp.isBetaVersion(emptyJson));
+                assert(!histUp.detectVersion(emptyJson));
+            });
+
+            it("given beta version detect beta", function() {
+                let emptyBetaHistory = JSON.stringify(EMPTY_BETA_HISTORY);
+                assert(!histUp.isAlphaVersion(emptyBetaHistory));
+                assert(histUp.isBetaVersion(emptyBetaHistory));
+                assert.equal(histUp.detectVersion(emptyBetaHistory), DUMMY_BETA_VERSION, "Should detect Beta");
+            });
+
+            it("detect version 1", function() {
+                let simpleJson = JSON.stringify(SIMPLE_HISTORY);
+                assert(!histUp.isAlphaVersion(simpleJson));
+                assert(!histUp.isBetaVersion(simpleJson));
+                assert.equal(histUp.detectVersion(simpleJson), 1, "Should detect version 1");
+            });
+
+            it("should return true for upgrade when given beta", function() {
+                let emptyBetaHistory = JSON.stringify(EMPTY_BETA_HISTORY);
+                assert(histUp.shouldUpgradeHistory(emptyBetaHistory));
+            });
+
+            it("should return true for upgrade when given version 0.5", function() {
+                let version05History = JSON.stringify({VERSION:0.5});
+                assert(histUp.shouldUpgradeHistory(version05History));
+            });
+        });
     });
 
     describe("#getHistory", function() {
@@ -91,6 +125,19 @@ describe("HistoryManager", function() {
                 () => man.getHistory(MISSING_INSTANCE),
                 /Failed to load history for 11. Cause: Could not find 'test\/snapshots\/11\/history.json'/
             );
+        });
+
+        it("testHistoryJsonConversionToObjectInstance", () => {
+            let h = new History(123, {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]});
+            fs.writeFileSync(testRootDir + 123 + "/history.json", JSON.stringify(h), err => {
+                if (err) {
+                    throw err;
+                }
+            });
+
+            let data = readAndParse(testRootDir + 123 + "/history.json");
+            let historyObj = Object.assign(new History, data);
+            assert.equal(historyObj.getVersion(), 1, "Failed version match");
         });
     });
 

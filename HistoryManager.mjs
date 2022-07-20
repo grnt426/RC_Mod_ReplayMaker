@@ -2,7 +2,11 @@ import fs from "fs";
 import {DateTime} from "luxon";
 import clone from "./clone.js";
 
-export default class HistoryManager {
+export const LATEST_HISTORY_VESRION = 1;
+export const DUMMY_ALPHA_VERSION = -2;
+export const DUMMY_BETA_VERSION = -1;
+
+export class HistoryManager {
 
     #loadedGalaxies = {};
     #rootDir = "./";
@@ -45,7 +49,7 @@ export default class HistoryManager {
                     throw "Could not find '" + file + "'";
                 }
 
-                history = JSON.parse(fs.readFileSync(file, 'utf8'));
+                history = Object.assign(new History, JSON.parse(fs.readFileSync(file, 'utf8')));
                 this.#loadedGalaxies[instance] = history;
             }
 
@@ -74,12 +78,13 @@ export default class HistoryManager {
         }
 
         const file = this.#getFilePathForHistory(instance);
+        let history = new History(instance, galaxy);
         const historyData = {
-            start:DateTime.now().toISO(), base:galaxy,
+            start:DateTime.now().toISO(), base:clone(galaxy),
             current:clone(galaxy), snapshots: [], undo: [], instance:instance,
             currentTime:DateTime.now().toISO()
         }
-        this.#loadedGalaxies[instance] = historyData;
+        this.#loadedGalaxies[instance] = history;
 
         fs.mkdir(this.#rootDir + instance, err => {
             if(err) {
@@ -87,7 +92,7 @@ export default class HistoryManager {
                 window.granite.debug("Failed to create replay dir for " + isntance + ": " + err, window.granite.levels.ERROR);
             }
             else {
-                fs.writeFile(file, JSON.stringify(historyData), err => {
+                fs.writeFile(file, JSON.stringify(history), err => {
                     if (err) {
                         window.granite.debug("Error in saving initial galaxy: " + err, window.granite.levels.ERROR);
                     }
@@ -206,5 +211,124 @@ export default class HistoryManager {
         });
 
         return res;
+    }
+}
+
+export class History {
+
+    // Changes to the field members of this class should always mean an update to this version number
+    VERSION = null;
+
+    // What real world time did this History object first start recording?
+    start = "";
+
+    // To avoid duplication, this is the base data that will never change within a game, such as coordinates,
+    // names, sector boundaries, etc.
+    base = {};
+
+    // The current state of the galaxy, depending on where in the snapshot/undo history we are.
+    current = {};
+
+    // Snapshots of changes to apply to the `current` galactic state that are forwards in time.
+    snapshots = [];
+
+    // Snapshots of changes to apply to the `current` galactic state that are backwards in time.
+    undo = [];
+
+    // Unique, incrementally increasing integer ID of the game.
+    instance = -1;
+
+    // What point in real world time is the `current` galactic state.
+    currentTimestamp = null;
+
+    // Slow = Legacy, Fast = Flash.
+    gameType = "slow";
+
+    constructor(instance, galaxy = null) {
+
+        // If galaxy isn't null, then we need to construct a new history object.
+        if(galaxy !== null) {
+            this.start = DateTime.now().toISO();
+            this.base = clone(galaxy);
+            this.current = clone(galaxy);
+            this.snapshots = [];
+            this.undo = [];
+            this.instance = instance;
+            this.currentTimestamp = DateTime.now().toISO();
+        }
+
+        this.VERSION = LATEST_HISTORY_VESRION;
+    }
+
+    getVersion() {
+        return this.VERSION;
+    }
+}
+
+export class HistoryVersionUpgrader {
+
+    shouldUpgradeHistory(json) {
+        return !json.VERSION && json.version !== LATEST_HISTORY_VESRION;
+    }
+
+    isAlphaVersion(json) {
+        return false;
+    }
+
+    isBetaVersion(json) {
+        try {
+            let parsed = JSON.parse(json);
+
+            // Beta versions don't have the system and sector updates combined into a single snapshot record.
+            // Thus, if we detect the absence of the `system` property, we know they aren't bundled together
+            // and this must be an old version.
+            return !parsed.VERSION && parsed.snapshots && parsed.snapshots.length > 0 && !parsed.snapshots[0].system;
+        }
+        catch(err) {
+            return false;
+        }
+    }
+
+    detectVersion(json) {
+        if(this.isAlphaVersion(json)) {
+            return DUMMY_ALPHA_VERSION;
+        }
+        else if(this.isBetaVersion(json)) {
+            return DUMMY_BETA_VERSION;
+        }
+
+        try {
+            return JSON.parse(json).VERSION;
+        }
+        catch(err) {
+            return false;
+        }
+    }
+
+    upgradeHistoryFile(json) {
+
+        let detectedVersion = this.detectVersion(json);
+
+        // Creating direct version upgrades over time can be cumbersome, so instead we allow for incremental
+        // upgrades over time, as upgrading from A -> B is easy to understand, but A -> D means retroactively
+        // understanding how to upgrade from A -> D, when we already have code to upgrade from A -> B, B-> C, and then
+        // C -> D
+        while(detectedVersion !== LATEST_HISTORY_VESRION) {
+            switch(detectedVersion) {
+                case DUMMY_ALPHA_VERSION: this.upgradeAlpha(json); break;
+                case DUMMY_BETA_VERSION: this.upgradeBeta(json); break;
+                default: throw "Unable to upgrade history file: unknown version: " + detectedVersion;
+            }
+
+            detectedVersion = this.detectVersion(json);
+        }
+    }
+
+    upgradeAlpha(json) {
+
+    }
+
+    upgradeBeta(json) {
+
     }
 }

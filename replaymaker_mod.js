@@ -1,4 +1,4 @@
-import HistoryManager from "./HistoryManager.mjs";
+import {HistoryManager} from "./HistoryManager.mjs";
 let fs = require("fs");
 let clone = require("./clone");
 
