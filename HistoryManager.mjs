@@ -207,10 +207,13 @@ export class HistoryManager {
 
     #getById(list, id) {
         let res = null;
-        list.forEach(e => {
-            if(e.id === id)
-                res = e;
-        });
+
+        if(list) {
+            list.forEach(e => {
+                if(e.id === id)
+                    res = e;
+            });
+        }
 
         return res;
     }
