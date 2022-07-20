@@ -90,9 +90,14 @@ describe("HistoryManager", function() {
                 assert.equal(histUp.detectVersion(simpleJson), 1, "Should detect version 1");
             });
 
-            it("should return true for upgrade when given beta", function() {
+            it("should return true for upgrade when given empty beta", function() {
                 let emptyBetaHistory = JSON.stringify(EMPTY_BETA_HISTORY);
                 assert(histUp.shouldUpgradeHistory(emptyBetaHistory));
+            });
+
+            it("should return true for upgrade when given simple beta", function() {
+                let simpleBetaHistory = JSON.stringify(createSimpleBetaHistory());
+                assert(histUp.shouldUpgradeHistory(simpleBetaHistory));
             });
 
             it("should return true for upgrade when given version 0.5", function() {
@@ -102,7 +107,21 @@ describe("HistoryManager", function() {
         });
 
         describe("#upgradeHistoryFile", function() {
+            it("should upgrade beta to version 1", function() {
 
+                let historyData = JSON.stringify(createSimpleBetaHistory());
+                let history = histUp.upgradeHistoryFile(historyData);
+
+                assert(history, "Expected history to be an object");
+                assert.equal(history.VERSION, 1, "Expected VERSION to be 1");
+
+                assert.equal(history.snapshots.length, 1, "Expected a single snap");
+                // assert.equal(history.undo.length, 1, "Expected a single undo snap");
+
+                let snap = history.snapshots[0];
+                assert(snap.system, "Expected to see a system object inside the snap");
+                assert(snap.sector, "Expected to see a sector object inside the snap");
+            });
         });
     });
 
@@ -245,4 +264,67 @@ function readAndParse(file) {
     const res = fs.readFileSync(file, 'utf8');
     assert.notEqual(res, null, "File shouldn't be empty");
     return JSON.parse(res);
+}
+
+function createSimpleBetaHistory() {
+    const sector = {
+        "id":0,
+        "name":"sector",
+        "owner":null,
+        "division":[{"faction":null, points:1}],
+    };
+    const system = {
+        "id": 1,
+        "name":"system name",
+        "owner":null,
+        "sector_id": 0,
+        "status":"uninhabited"
+    };
+
+    const systemUpdate = {
+        type:"system",
+        owner:"Granite",
+        faction:"ark",
+        status:"inhabited",
+        id:system.id,
+        sector_id:sector.id,
+        time:1,
+    }
+
+    const sectorUpdate = {
+        type:"sector",
+        owner:"ark",
+        id:sector.id,
+        time:1,
+    }
+
+    const undoSystem = {
+        type:"system",
+        owner:null,
+        faction:null,
+        status:"uninhabited",
+        id:system.id,
+        sector_id:sector.id,
+        time:1,
+    }
+
+    const undoSector = {
+        type:"sector",
+        owner:null,
+        id:sector.id,
+        time:1,
+    }
+
+    const snapshots = [systemUpdate, sectorUpdate];
+    const undo = [systemUpdate, sectorUpdate];
+
+    const history = {
+        galaxy:{stellar_systems:[system], sectors:[sector]},
+        snapshots:snapshots,
+        undo:undo,
+    }
+    history.start = "2022-03-24T10:00:00.000-04:00";
+    history.currentTimestamp = "2022-03-24T10:00:00.000-04:00";
+
+    return history;
 }

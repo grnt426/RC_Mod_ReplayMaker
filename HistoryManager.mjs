@@ -2,9 +2,11 @@ import fs from "fs";
 import {DateTime} from "luxon";
 import clone from "./clone.js";
 
-export const LATEST_HISTORY_VESRION = 1;
-export const DUMMY_ALPHA_VERSION = -2;
+export const VERSION_ONE = 1;
 export const DUMMY_BETA_VERSION = -1;
+export const DUMMY_ALPHA_VERSION = -2;
+
+export const LATEST_HISTORY_VESRION = VERSION_ONE;
 
 export class HistoryManager {
 
@@ -317,27 +319,59 @@ export class HistoryVersionUpgrader {
 
         let detectedVersion = this.detectVersion(historyObj);
 
-        // Creating direct version upgrades over time can be cumbersome, so instead we allow for incremental
-        // upgrades over time, as upgrading from A -> B is easy to understand, but A -> D means retroactively
-        // understanding how to upgrade from A -> D, when we already have code to upgrade from A -> B, B-> C, and then
-        // C -> D
+        // Creating direct version upgrades can be cumbersome, so instead we allow for incremental
+        // upgrades, as upgrading from A -> B is easy to understand, but A -> D means retroactively
+        // understanding how to upgrade from A -> D, when we already have code to upgrade from A -> B, and B-> C
         while(detectedVersion !== LATEST_HISTORY_VESRION) {
             switch(detectedVersion) {
-                case DUMMY_ALPHA_VERSION: this.upgradeAlpha(historyObj); break;
-                case DUMMY_BETA_VERSION: this.upgradeBeta(historyObj); break;
+                case DUMMY_ALPHA_VERSION: historyObj = this.upgradeAlpha(historyObj); break;
+                case DUMMY_BETA_VERSION: historyObj = this.upgradeBeta(historyObj); break;
                 default: throw "Unable to upgrade history file: unknown version: " + detectedVersion;
             }
 
             detectedVersion = this.detectVersion(historyObj);
         }
+
+        return Object.assign(new History, historyObj);
     }
 
-    upgradeAlpha(json) {
+    upgradeAlpha(historyObj) {
 
     }
 
-    upgradeBeta(json) {
+    /**
+     * Beta replays need to have sector snapshots deleted, recalculate when a sector has its control taken, and
+     * bundle sector updates into a single snapshot object alongside the system update.
+     *
+     * A version property is also added.
+     *
+     * @param historyObj
+     */
+    upgradeBeta(historyObj) {
+        historyObj.VERSION = VERSION_ONE;
 
+        let newSnapshots = [];
+        let undoSnapshots = [];
+
+        historyObj.snapshots.forEach(s =>  {
+
+            // we ignore sector updates as they are wrong, and anyway we will bundle them to system updates.
+            if(s.type === "system") {
+                delete s.type;
+                let snap = {
+                    system:s,
+                    sector:{
+
+                    },
+                };
+
+                newSnapshots.push(snap);
+            }
+        });
+
+        historyObj.snapshots = newSnapshots;
+
+        return historyObj;
     }
 
     /**
