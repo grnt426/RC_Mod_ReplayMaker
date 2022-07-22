@@ -125,119 +125,139 @@ describe("HistoryManager", function() {
         });
     });
 
-    describe("#getHistory", function() {
+    describe("HistoryManager", function() {
 
-        it("should load history from disk", function() {
-            const history = man.getHistory(EMPTY_INSTANCE);
-            assert.notEqual(history, null, "Should not be null or undefined.");
-            assert.deepStrictEqual(history, EMPTY_HISTORY);
-        });
+        describe("constructor", function() {
+            const CONSTRUCT_TEST_DIR = "test/constuctor";
 
-        it("should return history that was loaded previously", function() {
-            const history = man.getHistory(EMPTY_INSTANCE);
-            assert.notEqual(history, null, "Should not be null or undefined.");
-            assert.deepStrictEqual(history, EMPTY_HISTORY);
-
-            const historyAgain = man.getHistory(EMPTY_INSTANCE);
-            assert.notEqual(historyAgain, null, "Should not be null or undefined.");
-            assert.deepStrictEqual(historyAgain, EMPTY_HISTORY);
-        });
-
-        it("should throw an exception if no history", function() {
-            assert.throws(
-                () => man.getHistory(MISSING_INSTANCE),
-                /Failed to load history for 11. Cause: Could not find 'test\/snapshots\/11\/history.json'/
-            );
-        });
-
-        it("testHistoryJsonConversionToObjectInstance", () => {
-            let h = new History(123, {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]});
-            fs.writeFileSync(testRootDir + 123 + "/history.json", JSON.stringify(h), err => {
-                if (err) {
-                    throw err;
-                }
+            beforeEach(function() {
+                if(fs.existsSync(CONSTRUCT_TEST_DIR))
+                    fs.rmdirSync(CONSTRUCT_TEST_DIR);
             });
 
-            let data = readAndParse(testRootDir + 123 + "/history.json");
-            let historyObj = Object.assign(new History, data);
-            assert.equal(historyObj.getVersion(), 1, "Failed version match");
-        });
-    });
+            it("should create dir if not exist", async function() {
+                let man = new HistoryManager(CONSTRUCT_TEST_DIR);
 
-    describe("#applySystemUpdate", function() {
-        it("should throw an exception if system not in current", function(){
-            assert.throws(
-                () => man.applySystemUpdate(SIMPLE_SYSTEM, EMPTY_INSTANCE),
-                /Null system ID: 1 from instance 10/
-            );
+                // wait one second for the dir to get created
+                await new Promise(r => setTimeout(r, 1000));
+                assert(fs.existsSync(CONSTRUCT_TEST_DIR), "Expected the constructor to create the Dir");
+            });
         });
 
-        it("should update owner when it changes", function(){
-            const newSys = structuredClone(SIMPLE_SYSTEM);
-            newSys.owner = "new owner";
+        describe("#getHistory", function() {
 
-            mockGetSector(man, SIMPLE_HISTORY);
+            it("should load history from disk", function() {
+                const history = man.getHistory(EMPTY_INSTANCE);
+                assert.notEqual(history, null, "Should not be null or undefined.");
+                assert.deepStrictEqual(history, EMPTY_HISTORY);
+            });
 
-            man.applySystemUpdate(newSys, SIMPLE_INSTANCE);
-            const res = readAndParse(SIMPLE_INSTANCE_PATH);
-            assertSnapshotLengths(res, 1, 1);
+            it("should return history that was loaded previously", function() {
+                const history = man.getHistory(EMPTY_INSTANCE);
+                assert.notEqual(history, null, "Should not be null or undefined.");
+                assert.deepStrictEqual(history, EMPTY_HISTORY);
 
-            assert.strictEqual(res.snapshots[0].system.owner, newSys.owner, "Owner should be new one");
+                const historyAgain = man.getHistory(EMPTY_INSTANCE);
+                assert.notEqual(historyAgain, null, "Should not be null or undefined.");
+                assert.deepStrictEqual(historyAgain, EMPTY_HISTORY);
+            });
 
-            assert.strictEqual(res.undo[0].system.owner, SIMPLE_SYSTEM.owner, "Owner should be new previous");
+            it("should throw an exception if no history", function() {
+                assert.throws(
+                    () => man.getHistory(MISSING_INSTANCE),
+                    /Failed to load history for 11. Cause: Could not find 'test\/snapshots\/11\/history.json'/
+                );
+            });
 
-            assert.strictEqual(res.current.stellar_systems[0].owner, newSys.owner,
-                "Current state should reflect changes.");
-            assert.strictEqual(res.base.stellar_systems[0].owner, null,
-                "Base state should still be null.");
+            it("testHistoryJsonConversionToObjectInstance", () => {
+                let h = new History(123, {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]});
+                fs.writeFileSync(testRootDir + 123 + "/history.json", JSON.stringify(h), err => {
+                    if (err) {
+                        throw err;
+                    }
+                });
+
+                let data = readAndParse(testRootDir + 123 + "/history.json");
+                let historyObj = Object.assign(new History, data);
+                assert.equal(historyObj.getVersion(), 1, "Failed version match");
+            });
         });
 
-        it("should not update with no changes", function(){
-            man.applySystemUpdate(SIMPLE_SYSTEM, SIMPLE_INSTANCE);
-            const res = readAndParse(SIMPLE_INSTANCE_PATH);
-            assert.notEqual(res, null, "Should not be null.");
-            assert.equal(res.snapshots.length, 0, "Should not have a snap record.");
-            assert.equal(res.undo.length, 0, "Should not have an undo record.");
+        describe("#applySystemUpdate", function() {
+            it("should throw an exception if system not in current", function(){
+                assert.throws(
+                    () => man.applySystemUpdate(SIMPLE_SYSTEM, EMPTY_INSTANCE),
+                    /Null system ID: 1 from instance 10/
+                );
+            });
 
-            assert.strictEqual(res.current.stellar_systems[0].owner, null,
-                "Current state should still be null for owner.");
-            assert.strictEqual(res.base.stellar_systems[0].owner, null,
-                "Base state should still be null.");
-        });
+            it("should update owner when it changes", function(){
+                const newSys = structuredClone(SIMPLE_SYSTEM);
+                newSys.owner = "new owner";
 
-        it("should not write unneeded information", function(){
-            const newSys = structuredClone(SIMPLE_SYSTEM);
-            newSys.position = "not needed";
-            newSys.score = "not needed";
-            newSys.receivedAt = "not needed";
-            newSys.owner = "new owner";
+                mockGetSector(man, SIMPLE_HISTORY);
 
-            mockGetSector(man, SIMPLE_HISTORY);
+                man.applySystemUpdate(newSys, SIMPLE_INSTANCE);
+                const res = readAndParse(SIMPLE_INSTANCE_PATH);
+                assertSnapshotLengths(res, 1, 1);
 
-            man.applySystemUpdate(newSys, SIMPLE_INSTANCE);
-            const res = readAndParse(SIMPLE_INSTANCE_PATH);
-            assertSnapshotLengths(res, 1, 1);
+                assert.strictEqual(res.snapshots[0].system.owner, newSys.owner, "Owner should be new one");
 
-            let snap = res.snapshots[0];
-            let usnap = res.undo[0];
+                assert.strictEqual(res.undo[0].system.owner, SIMPLE_SYSTEM.owner, "Owner should be new previous");
 
-            assert.strictEqual(snap.system.owner, newSys.owner, "Owner should be new one");
-            assert.strictEqual(usnap.system.owner, SIMPLE_SYSTEM.owner, "Owner should be new previous");
+                assert.strictEqual(res.current.stellar_systems[0].owner, newSys.owner,
+                    "Current state should reflect changes.");
+                assert.strictEqual(res.base.stellar_systems[0].owner, null,
+                    "Base state should still be null.");
+            });
 
-            assert.equal(res.current.stellar_systems[0].position, null, "Shouldn't have this.");
-            assert.equal(res.current.stellar_systems[0].score, null, "Shouldn't have this.");
-            assert.equal(res.current.stellar_systems[0].receivedAt, null, "Shouldn't have this.");
-            assert.equal(snap.system.position, null, "Shouldn't have this.");
-            assert.equal(snap.system.score, null, "Shouldn't have this.");
-            assert.equal(snap.system.receivedAt, null, "Shouldn't have this.");
-            assert.equal(usnap.position, null, "Shouldn't have this.");
-            assert.equal(usnap.score, null, "Shouldn't have this.");
-            assert.equal(usnap.receivedAt, null, "Shouldn't have this.");
+            it("should not update with no changes", function(){
+                man.applySystemUpdate(SIMPLE_SYSTEM, SIMPLE_INSTANCE);
+                const res = readAndParse(SIMPLE_INSTANCE_PATH);
+                assert.notEqual(res, null, "Should not be null.");
+                assert.equal(res.snapshots.length, 0, "Should not have a snap record.");
+                assert.equal(res.undo.length, 0, "Should not have an undo record.");
 
-            assert.strictEqual(res.current.stellar_systems[0].owner, newSys.owner,
-                "Current state should reflect changes.");
-            assert.strictEqual(res.base.stellar_systems[0].owner, null,
-                "Base state should still be null.");
+                assert.strictEqual(res.current.stellar_systems[0].owner, null,
+                    "Current state should still be null for owner.");
+                assert.strictEqual(res.base.stellar_systems[0].owner, null,
+                    "Base state should still be null.");
+            });
+
+            it("should not write unneeded information", function(){
+                const newSys = structuredClone(SIMPLE_SYSTEM);
+                newSys.position = "not needed";
+                newSys.score = "not needed";
+                newSys.receivedAt = "not needed";
+                newSys.owner = "new owner";
+
+                mockGetSector(man, SIMPLE_HISTORY);
+
+                man.applySystemUpdate(newSys, SIMPLE_INSTANCE);
+                const res = readAndParse(SIMPLE_INSTANCE_PATH);
+                assertSnapshotLengths(res, 1, 1);
+
+                let snap = res.snapshots[0];
+                let usnap = res.undo[0];
+
+                assert.strictEqual(snap.system.owner, newSys.owner, "Owner should be new one");
+                assert.strictEqual(usnap.system.owner, SIMPLE_SYSTEM.owner, "Owner should be new previous");
+
+                assert.equal(res.current.stellar_systems[0].position, null, "Shouldn't have this.");
+                assert.equal(res.current.stellar_systems[0].score, null, "Shouldn't have this.");
+                assert.equal(res.current.stellar_systems[0].receivedAt, null, "Shouldn't have this.");
+                assert.equal(snap.system.position, null, "Shouldn't have this.");
+                assert.equal(snap.system.score, null, "Shouldn't have this.");
+                assert.equal(snap.system.receivedAt, null, "Shouldn't have this.");
+                assert.equal(usnap.position, null, "Shouldn't have this.");
+                assert.equal(usnap.score, null, "Shouldn't have this.");
+                assert.equal(usnap.receivedAt, null, "Shouldn't have this.");
+
+                assert.strictEqual(res.current.stellar_systems[0].owner, newSys.owner,
+                    "Current state should reflect changes.");
+                assert.strictEqual(res.base.stellar_systems[0].owner, null,
+                    "Base state should still be null.");
+            });
         });
     });
 });
@@ -316,7 +336,7 @@ function createSimpleBetaHistory() {
     }
 
     const snapshots = [systemUpdate, sectorUpdate];
-    const undo = [systemUpdate, sectorUpdate];
+    const undo = [undoSystem, undoSector];
 
     const history = {
         galaxy:{stellar_systems:[system], sectors:[sector]},
