@@ -228,6 +228,10 @@ describe("HistoryManager", function() {
                 assert(res.snapshots[0].sector.division, "Expected a Division object");
                 assert(res.snapshots[0].sector.owner, "Expected an owner field");
 
+                assert.strictEqual(res.snapshots[0].sector.division.length, 1, "Expected one faction in control of sector");
+                assert.strictEqual(res.snapshots[0].sector.division[0].faction, FACTION_ARK, "Expected FACTION_ARK in control");
+                assert.strictEqual(res.snapshots[0].sector.division[0].points, 1, "Expected only 1 point for control");
+
                 assert(res.snapshots[0].time, "Expected a time for when this update happened");
                 const resTime = DateTime.fromISO(res.snapshots[0].time);
                 assert(Math.abs(resTime.toMillis() - DateTime.now().toMillis()) < 100, "Expected " +

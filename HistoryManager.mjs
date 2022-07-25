@@ -6,7 +6,7 @@ export const VERSION_ONE = 1;
 export const DUMMY_BETA_VERSION = -1;
 export const DUMMY_ALPHA_VERSION = -2;
 
-export const LATEST_HISTORY_VESRION = VERSION_ONE;
+export const LATEST_HISTORY_VERSION = VERSION_ONE;
 
 export class HistoryManager {
 
@@ -259,7 +259,7 @@ export class History {
             this.currentTimestamp = DateTime.now().toISO();
         }
 
-        this.VERSION = LATEST_HISTORY_VESRION;
+        this.VERSION = LATEST_HISTORY_VERSION;
     }
 
     getVersion() {
@@ -271,7 +271,7 @@ export class HistoryVersionUpgrader {
 
     shouldUpgradeHistory(h) {
         let hist = this.#convertHistoryToObj(h);
-        return !hist.VERSION || hist.VERSION !== LATEST_HISTORY_VESRION;
+        return !hist.VERSION || hist.VERSION !== LATEST_HISTORY_VERSION;
     }
 
     isAlphaVersion(h) {
@@ -322,7 +322,7 @@ export class HistoryVersionUpgrader {
         // Creating direct version upgrades can be cumbersome, so instead we allow for incremental
         // upgrades, as upgrading from A -> B is easy to understand, but A -> D means retroactively
         // understanding how to upgrade from A -> D, when we already have code to upgrade from A -> B, and B-> C
-        while(detectedVersion !== LATEST_HISTORY_VESRION) {
+        while(detectedVersion !== LATEST_HISTORY_VERSION) {
             switch(detectedVersion) {
                 case DUMMY_ALPHA_VERSION: historyObj = this.upgradeAlpha(historyObj); break;
                 case DUMMY_BETA_VERSION: historyObj = this.upgradeBeta(historyObj); break;
