@@ -2,6 +2,14 @@ import assert from 'assert';
 import {HistoryManager, History, HistoryVersionUpgrader, DUMMY_BETA_VERSION} from "../../HistoryManager.mjs";
 import fs from "fs";
 import structuredClone from "realistic-structured-clone";
+import {DateTime} from "luxon";
+
+const FACTION_ARK = "ark";
+const FACTION_TET = "tet";
+
+const SIMPLE_OWNER = "Granite";
+const SIMPLE_SYSTEM_FLIP_TIME = "2022-03-24T10:00:00.000-04:00";
+const GAME_START_TIME = "2022-02-01T1:00:00.000-04:00";
 
 describe("HistoryManager", function() {
 
@@ -27,38 +35,38 @@ describe("HistoryManager", function() {
     const SIMPLE_INSTANCE = 20;
     const SIMPLE_INSTANCE_PATH = testRootDir + SIMPLE_INSTANCE + "/history.json";
     const SIMPLE_SECTOR = {
-        "id":0,
-        "name":"simple sector",
-        "owner":null,
-        "division":[{"faction":null, points:1}],
+        "id": 0,
+        "name": "simple sector",
+        "owner": null,
+        "division": [{"faction": null, points: 1}],
     };
     const SIMPLE_SYSTEM = {
         "id": 1,
-        "name":"system name",
-        "owner":null,
+        "name": "system name",
+        "owner": null,
         "sector_id": 0,
-        "status":"uninhabited"
+        "status": "uninhabited"
     };
     const SIMPLE_HISTORY = new History(
-        SIMPLE_INSTANCE, {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]}
+        SIMPLE_INSTANCE, {stellar_systems: [SIMPLE_SYSTEM], sectors: [SIMPLE_SECTOR]}
     );
     SIMPLE_HISTORY.start = "2022-03-24T10:01:50.085-04:00";
     SIMPLE_HISTORY.currentTimestamp = "2022-03-24T10:01:50.085-04:00";
 
     const EMPTY_BETA_HISTORY = {
-        snapshots:[{}]
+        snapshots: [{}]
     }
 
     beforeEach(function() {
 
         fs.writeFileSync(EMPTY_INSTANCE_PATH, JSON.stringify(EMPTY_HISTORY), err => {
-            if (err) {
+            if(err) {
                 throw err;
             }
         });
 
         fs.writeFileSync(SIMPLE_INSTANCE_PATH, JSON.stringify(SIMPLE_HISTORY), err => {
-            if (err) {
+            if(err) {
                 throw err;
             }
         });
@@ -101,7 +109,7 @@ describe("HistoryManager", function() {
             });
 
             it("should return true for upgrade when given version 0.5", function() {
-                let version05History = JSON.stringify({VERSION:0.5});
+                let version05History = JSON.stringify({VERSION: 0.5});
                 assert(histUp.shouldUpgradeHistory(version05History));
             });
         });
@@ -170,9 +178,9 @@ describe("HistoryManager", function() {
             });
 
             it("testHistoryJsonConversionToObjectInstance", () => {
-                let h = new History(123, {stellar_systems:[SIMPLE_SYSTEM],sectors:[SIMPLE_SECTOR]});
+                let h = new History(123, {stellar_systems: [SIMPLE_SYSTEM], sectors: [SIMPLE_SECTOR]});
                 fs.writeFileSync(testRootDir + 123 + "/history.json", JSON.stringify(h), err => {
-                    if (err) {
+                    if(err) {
                         throw err;
                     }
                 });
@@ -184,18 +192,19 @@ describe("HistoryManager", function() {
         });
 
         describe("#applySystemUpdate", function() {
-            it("should throw an exception if system not in current", function(){
+            it("should throw an exception if system not in current", function() {
                 assert.throws(
                     () => man.applySystemUpdate(SIMPLE_SYSTEM, EMPTY_INSTANCE),
                     /Null system ID: 1 from instance 10/
                 );
             });
 
-            it("should update owner when it changes", function(){
+            it("should update owner when it changes", function() {
                 const newSys = structuredClone(SIMPLE_SYSTEM);
                 newSys.owner = "new owner";
 
-                mockGetSector(man, SIMPLE_HISTORY);
+                const simpleHistory = createSimpleHistory();
+                mockGetSector(man, simpleHistory);
 
                 man.applySystemUpdate(newSys, SIMPLE_INSTANCE);
                 const res = readAndParse(SIMPLE_INSTANCE_PATH);
@@ -203,15 +212,30 @@ describe("HistoryManager", function() {
 
                 assert.strictEqual(res.snapshots[0].system.owner, newSys.owner, "Owner should be new one");
 
-                assert.strictEqual(res.undo[0].system.owner, SIMPLE_SYSTEM.owner, "Owner should be new previous");
+                assert.strictEqual(res.undo[0].system.owner, SIMPLE_SYSTEM.owner, "Owner should be new " +
+                    "previous");
 
                 assert.strictEqual(res.current.stellar_systems[0].owner, newSys.owner,
-                    "Current state should reflect changes.");
+                    "Current system state should reflect changes.");
                 assert.strictEqual(res.base.stellar_systems[0].owner, null,
-                    "Base state should still be null.");
+                    "Base system state should still be null.");
+                assert.strictEqual(res.current.sectors[0].owner, FACTION_ARK,
+                    "Current sector state should reflect changes.");
+                assert.strictEqual(res.base.sectors[0].owner, null,
+                    "Base sector state should still be null.");
+
+                assert(res.snapshots[0].sector, "Expected a Sector object");
+                assert(res.snapshots[0].sector.division, "Expected a Division object");
+                assert(res.snapshots[0].sector.owner, "Expected an owner field");
+
+                assert(res.snapshots[0].time, "Expected a time for when this update happened");
+                const resTime = DateTime.fromISO(res.snapshots[0].time);
+                assert(Math.abs(resTime.toMillis() - DateTime.now().toMillis()) < 100, "Expected " +
+                    "update to be recent");
+
             });
 
-            it("should not update with no changes", function(){
+            it("should not update with no changes", function() {
                 man.applySystemUpdate(SIMPLE_SYSTEM, SIMPLE_INSTANCE);
                 const res = readAndParse(SIMPLE_INSTANCE_PATH);
                 assert.notEqual(res, null, "Should not be null.");
@@ -224,7 +248,7 @@ describe("HistoryManager", function() {
                     "Base state should still be null.");
             });
 
-            it("should not write unneeded information", function(){
+            it("should not write unneeded information", function() {
                 const newSys = structuredClone(SIMPLE_SYSTEM);
                 newSys.position = "not needed";
                 newSys.score = "not needed";
@@ -288,63 +312,132 @@ function readAndParse(file) {
 
 function createSimpleBetaHistory() {
     const sector = {
-        "id":0,
-        "name":"sector",
-        "owner":null,
-        "division":[{"faction":null, points:1}],
+        "id": 0,
+        "name": "sector",
+        "owner": null,
+        "division": [{"faction": null, points: 1}],
     };
     const system = {
         "id": 1,
-        "name":"system name",
-        "owner":null,
+        "name": "system name",
+        "owner": null,
         "sector_id": 0,
-        "status":"uninhabited"
+        "status": "uninhabited"
     };
 
     const systemUpdate = {
-        type:"system",
-        owner:"Granite",
-        faction:"ark",
-        status:"inhabited",
-        id:system.id,
-        sector_id:sector.id,
-        time:1,
+        type: "system",
+        owner: "Granite",
+        faction: "ark",
+        status: "inhabited",
+        id: system.id,
+        sector_id: sector.id,
+        time: 1,
     }
 
     const sectorUpdate = {
-        type:"sector",
-        owner:"ark",
-        id:sector.id,
-        time:1,
+        type: "sector",
+        owner: "ark",
+        id: sector.id,
+        time: 1,
     }
 
     const undoSystem = {
-        type:"system",
-        owner:null,
-        faction:null,
-        status:"uninhabited",
-        id:system.id,
-        sector_id:sector.id,
-        time:1,
+        type: "system",
+        owner: null,
+        faction: null,
+        status: "uninhabited",
+        id: system.id,
+        sector_id: sector.id,
+        time: 1,
     }
 
     const undoSector = {
-        type:"sector",
-        owner:null,
-        id:sector.id,
-        time:1,
+        type: "sector",
+        owner: null,
+        id: sector.id,
+        time: 1,
     }
 
     const snapshots = [systemUpdate, sectorUpdate];
     const undo = [undoSystem, undoSector];
 
-    const history = {
-        galaxy:{stellar_systems:[system], sectors:[sector]},
-        snapshots:snapshots,
-        undo:undo,
+    return {
+        galaxy: {stellar_systems: [system], sectors: [sector]},
+        snapshots: snapshots,
+        undo: undo,
+        start: GAME_START_TIME,
+        currentTimestamp: "2022-03-24T10:00:00.000-04:00"
     }
-    history.start = "2022-03-24T10:00:00.000-04:00";
-    history.currentTimestamp = "2022-03-24T10:00:00.000-04:00";
+}
 
-    return history;
+function createSimpleHistory() {
+
+    const baseSector = {
+        "id": 0,
+        "name": "simple sector",
+        "owner": null,
+        "division": [{"faction": null, points: 1}],
+    };
+    const baseSystem = {
+        "id": 1,
+        "name": "system name",
+        "owner": null,
+        "sector_id": 0,
+        "status": "uninhabited"
+    };
+
+    const sector = {
+        "id": 0,
+        "name": "simple sector",
+        "owner": FACTION_ARK,
+        "division": [{"faction": FACTION_ARK, points: 1}],
+    };
+    const system = {
+        "id": 1,
+        "name": "system name",
+        "owner": SIMPLE_OWNER,
+        "sector_id": 0,
+        "status": "uninhabited"
+    };
+
+    const systemUpdate = {
+        owner: SIMPLE_OWNER,
+        faction: FACTION_ARK,
+        status: "inhabited",
+        id: system.id,
+        sector_id: sector.id,
+    }
+
+    const sectorUpdate = {
+        owner: FACTION_ARK,
+        id: sector.id,
+        division: [{"faction": FACTION_ARK, points: 1}],
+    }
+
+    const undoSystem = {
+        owner: null,
+        faction: null,
+        status: "uninhabited",
+        id: system.id,
+        sector_id: sector.id,
+    }
+
+    const undoSector = {
+        owner: null,
+        id: sector.id,
+        division: [{"faction": null, points: 1}],
+    }
+
+    const snapshots = [{time: SIMPLE_SYSTEM_FLIP_TIME, system: systemUpdate, sector: sectorUpdate}];
+    const undo = [{time: SIMPLE_SYSTEM_FLIP_TIME, system: undoSystem, sector: undoSector}];
+
+    return {
+        galaxy: {stellar_systems: [baseSystem], sectors: [baseSector]},
+        current: {stellar_systems: [system], sectors: [sector]},
+        snapshots: snapshots,
+        undo: undo,
+        start: GAME_START_TIME,
+        currentTimestamp: SIMPLE_SYSTEM_FLIP_TIME
+    }
 }

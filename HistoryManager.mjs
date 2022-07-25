@@ -119,7 +119,6 @@ export class HistoryManager {
         }
 
         const history = this.getHistory(instance);
-        sys.type = "system";
         const curState = history.current;
         const storedSys = this.#getById(curState.stellar_systems, sys.id);
         const storedSec = this.#getById(curState.sectors, sys.sector_id);
@@ -138,8 +137,6 @@ export class HistoryManager {
             delete u.position;
             delete u.score;
             delete u.receivedAt;
-            u.time = history.currentTime;
-            u.type = "system";
 
             // Clean up the current snapshot
             sys.time = DateTime.now().toISO();
@@ -172,8 +169,8 @@ export class HistoryManager {
              *
              * Note: This means the replay format has changed. Older formats can still be forwards-compatible.
              */
-            const record = {system:sys, sector:clone(storedSec)};
-            const undoR = {system:u, sector:sec};
+            const record = {time:sys.time, system:sys, sector:clone(storedSec)};
+            const undoR = {time:sys.time, system:u, sector:sec};
 
             // Build the forwards/backwards snapshots
             history.undo.push(undoR);
